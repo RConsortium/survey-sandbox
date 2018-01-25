@@ -1,0 +1,423 @@
+---
+title: "R Consortium Survey 2017"
+author: "Augustina Ragwitz"
+date: "January 24, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r includes, message=FALSE}
+
+library(dplyr)
+library(ggplot2)
+library(hunspell)
+library(readr)
+library(stringr)
+library(tidyr)
+library(tidytext)
+library(wordcloud2)
+
+```
+
+
+# Results
+
+## Questions
+
+```{r questions_csv, message=FALSE}
+
+questions <- read_csv("data/question_summary.csv")
+
+```
+
+
+## Responses
+
+```{r responses_raw, eval=FALSE}
+
+# This comes from the R Consortium and it is not anonymized so it has not been made available in this form.
+# An anonymized form *will* be available soon and this will be updated when that happens!
+responses_raw <- read_tsv("downloads/responses.csv")
+write_tsv(responses_raw %>% select(id, Q27, Q28, Q29_SQ01, Q29_SQ02, Q29_SQ03, Q30, Q31, Q38), "data/responses_free_text.csv")
+```
+
+```{r responses_free_text, warning=FALSE, message=FALSE}
+
+responses_raw_free_text <- read_tsv("data/responses_free_text.csv")
+
+responses_rcons <- responses_raw_free_text %>% 
+  filter(Q27 != "{question_not_shown}" & str_length(Q27) > 3) %>%
+  select(id, Q27, Q28, Q29_SQ01, Q29_SQ02, Q29_SQ03, Q30, Q31, Q38)
+
+```
+
+## Word Count
+
+```{r q_words}
+
+# q_words <- q %>%
+#     mutate(text = str_replace_all(Q27, "\\{.*?\\}", " ")) %>%
+#     unnest_tokens(word, text)
+# 
+# q_words <- fix_spelling(q_words)
+# 
+# q_words_top <- top_q_tf_idf(q_words)
+
+check_spelling <- function(q_words) {
+
+  q_words_spellcheck <- q_words %>% 
+    select(word) %>%
+    group_by(word) %>%
+    summarise() %>%
+    mutate(
+      en_us = hunspell_check(word, dict = dictionary("en_US")),
+      en_gb = hunspell_check(word, dict = dictionary("en_GB")),
+      es_es = hunspell_check(word, dict = dictionary("es_ES")),
+      r = word %in% c("cran", "alteryx", "rmarkdown", "repl", "api", 
+                      "barug", "bioconductor", "walkthroughs", 
+                      "composable", "csv", "sig", "dplyr", 
+                      "foss", "eda", "geo", "ess", "e.g.", 
+                      "lme4", "emacs", "github", "qgis",
+                      "grdevices", "adhoc", "hpc", "httr",
+                      "ui", "i.e.", "jupyter", "knitr", "rladies",
+                      "listserv", "magrittr", "matlab", "mathematica",
+                      "mran", "nlp", "mysql", "pandoc", "splus", "mplus",
+                      "postgres", "postgis", "powerbi", "ropensci", 
+                      "purrr", "rcpp", "read_csv", "rmd", "rstan", "spss",
+                      "stata","rstats", "stan", "rstudio", "etl", "testthat",
+                      "tidyr", "tidyverse", "sweave", "stackoverflow") | 
+        str_detect(word, "data|df|app|bloggers|hadley|dplyr|ggplot|odbc|wickham")
+    )
+  
+  q_words_mispelled <- q_words_spellcheck %>%
+    filter(! (en_gb | en_us | es_es | r)) %>%
+    mutate(suggestions=word) %>%
+    mutate_at(c("suggestions"), hunspell_suggest) %>%
+    unnest(suggestions) %>%
+    group_by(word) %>%
+    summarise(suggestion=first(suggestions)) # just take the first suggestion for now
+  
+  return(q_words_mispelled)
+}
+
+fix_spelling <- function(q_words) {
+  q_words_mispelled <- check_spelling(q_words)
+  
+  q_words <- q_words %>% left_join(q_words_mispelled)
+  
+  q_words <- q_words %>%
+    mutate(
+      word_old = word,
+      word = ifelse(is.na(suggestion), word, suggestion)
+    ) %>%
+    count(id, word, sort = TRUE) %>%
+    ungroup()
+  
+  return(q_words)
+}
+
+stem_q_words <- function(q_words) {
+  q_stems <- q_words %>%
+  group_by(word) %>%
+  summarise() %>%
+  mutate(
+    stem = hunspell_stem(word)
+  ) %>%
+  unnest(stem) %>%
+  group_by(word) %>%
+    summarise(stem=first(stem))
+  
+  q_words <- q_words %>% left_join(q_stems)
+  
+  q_words <- q_words %>%
+    mutate(
+      word_old = word,
+      word = ifelse(is.na(stem), word, stem)
+    )
+  
+  return(q_words)
+}
+
+q_tf_idf <- function(q_words) {
+  
+  q_total_words <- q_words %>% 
+    group_by(id) %>% 
+    summarize(total = sum(n))
+  
+  q_words <- left_join(q_words, q_total_words)
+  
+  q_words <- q_words %>%
+    bind_tf_idf(word, id, n)
+  
+  q_words %>%
+    select(-total) %>%
+    arrange(desc(tf_idf))
+
+  return(q_words)
+}
+
+top_q_tf_idf <- function(q, tf_idf_value = 3, n_value = 1) {
+  
+  q_words <- q_tf_idf(q)
+  
+  q_top <- q_words %>% 
+    filter(tf_idf >= tf_idf_value) %>%
+    group_by(word) %>%
+    summarise(n=n()) %>%
+    filter(n > n_value)
+  
+  return(q_top)
+}
+
+# TODO filter out stop words and do word frequencies
+q_word_frequency <- function(q_words) {
+  q_words_no_stop <- q_words %>%
+    filter(!word %in% stop_words$word) %>%
+    group_by(word) %>%
+    summarise(n=n())
+  
+  return(q_words_no_stop)
+}
+
+
+
+```
+
+
+# Summary
+
+## Q27 Best of R
+
+```{r best_of, message=FALSE}
+
+best_of_r <- responses_rcons %>% 
+  select(id, Q27) %>%
+    mutate(text = str_replace_all(Q27, "\\{.*?\\}", " ")) %>%
+    unnest_tokens(word, text)
+
+best_of_r_stems <- stem_q_words(best_of_r)
+
+best_of_r_words <- fix_spelling(best_of_r_stems)
+
+best_of_r_words_top <- top_q_tf_idf(best_of_r_words)
+
+best_of_r_freq <- q_word_frequency(best_of_r_words)
+best_of_r_freq_top <- best_of_r_freq %>% top_n(25)
+
+```
+
+```{r best_of_r_plot}
+
+ggplot(best_of_r_words_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+
+ggplot(best_of_r_freq_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+```
+
+```{r best_of_r_wordcloud}
+
+best_of_r_wcdata <- best_of_r_words_top
+names(best_of_r_wcdata) <- c("word", "freq")
+wordcloud2(best_of_r_wcdata)
+
+best_of_r_freq_wcdata <- best_of_r_freq_top
+names(best_of_r_freq_wcdata) <- c("word", "freq")
+wordcloud2(best_of_r_freq_wcdata)
+
+```
+
+
+
+
+## Q28 Worst of R
+
+```{r worst_of, message=FALSE}
+
+worst_of_r <- responses_rcons %>% 
+  select(id, Q28) %>%
+    mutate(text = str_replace_all(Q28, "\\{.*?\\}", " ")) %>%
+    unnest_tokens(word, text)
+
+# worst_of_r_stems <- stem_q_words(worst_of_r)
+
+worst_of_r_words <- fix_spelling(worst_of_r)
+
+# worst_of_r_words_tfidf <- q_tf_idf(worst_of_r_words)
+
+worst_of_r_words_top <- top_q_tf_idf(worst_of_r_words, tf_idf_value=4, n_value=0)
+
+worst_of_r_freq <- q_word_frequency(worst_of_r_words)
+worst_of_r_freq_top <- worst_of_r_freq %>% top_n(25)
+```
+
+```{r worst_of_r_plot}
+
+ggplot(worst_of_r_words_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+ggplot(worst_of_r_freq_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+```
+
+```{r worst_of_r_wordcloud}
+
+worst_of_r_wcdata <- worst_of_r_words_top
+names(worst_of_r_wcdata) <- c("word", "freq")
+wordcloud2(worst_of_r_wcdata)
+
+worst_of_r_freq_wcdata <- worst_of_r_freq_top
+names(worst_of_r_freq_wcdata) <- c("word", "freq")
+wordcloud2(worst_of_r_freq_wcdata)
+
+```
+
+## Q29 Have you heard of the R consortium?
+
+```{r heard_of}
+
+
+
+```
+
+
+## Q30 Most useful R Consortium thing?
+
+```{r best_of_rcons, message=FALSE}
+
+best_of_rcons <- responses_rcons %>% 
+  select(id, Q30) %>%
+    mutate(text = str_replace_all(Q30, "\\{.*?\\}", " ")) %>%
+    unnest_tokens(word, text)
+
+best_of_rcons_words <- fix_spelling(best_of_rcons)
+
+# best_of_rcons_stems <- stem_q_words(best_of_rcons)
+best_of_rcons_words_tfidf <- q_tf_idf(best_of_rcons_words)
+
+best_of_rcons_words_top <- top_q_tf_idf(best_of_rcons_words, tf_idf_value=2.5, n_value=0)
+
+best_of_rcons_freq <- q_word_frequency(best_of_rcons_words)
+best_of_rcons_freq_top <- best_of_rcons_freq %>% top_n(25)
+```
+
+```{r best_of_rcons_plot}
+
+ggplot(best_of_rcons_words_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+ggplot(best_of_rcons_freq_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+```
+
+```{r best_of_rcons_wordcloud}
+
+best_of_rcons_wcdata <- best_of_rcons_words_top
+names(best_of_rcons_wcdata) <- c("word", "freq")
+wordcloud2(best_of_rcons_wcdata)
+
+best_of_rcons_freq_wcdata <- best_of_rcons_freq_top
+names(best_of_rcons_freq_wcdata) <- c("word", "freq")
+wordcloud2(best_of_rcons_freq_wcdata)
+
+```
+
+## Q31 What else should R Consortium do?
+
+```{r worst_of_rcons, message=FALSE}
+
+worst_of_rcons <- responses_rcons %>% 
+  select(id, Q31) %>%
+    mutate(text = str_replace_all(Q31, "\\{.*?\\}", " ")) %>%
+    unnest_tokens(word, text)
+
+worst_of_rcons_words <- fix_spelling(worst_of_rcons)
+
+# worst_of_rcons_stems <- stem_q_words(worst_of_rcons)
+worst_of_rcons_words_tfidf <- q_tf_idf(worst_of_rcons_words)
+
+worst_of_rcons_words_top <- top_q_tf_idf(worst_of_rcons_words, tf_idf_value=2.5, n_value=0)
+
+worst_of_rcons_freq <- q_word_frequency(worst_of_rcons_words)
+worst_of_rcons_freq_top <- worst_of_rcons_freq %>% top_n(25)
+```
+
+```{r worst_of_rcons_plot}
+
+ggplot(worst_of_rcons_words_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+ggplot(worst_of_rcons_freq_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+```
+
+```{r worst_of_rcons_wordcloud}
+
+worst_of_rcons_wcdata <- worst_of_rcons_words_top
+names(worst_of_rcons_wcdata) <- c("word", "freq")
+wordcloud2(worst_of_rcons_wcdata)
+
+worst_of_rcons_freq_wcdata <- worst_of_rcons_freq_top
+names(worst_of_rcons_freq_wcdata) <- c("word", "freq")
+wordcloud2(worst_of_rcons_freq_wcdata)
+```
+
+## Q38 Anything Else?
+
+```{r anything_else, message=FALSE}
+
+anything_else <- responses_rcons %>% 
+  select(id, Q38) %>%
+    mutate(text = str_replace_all(Q38, "\\{.*?\\}", " ")) %>%
+    unnest_tokens(word, text)
+
+anything_else_words <- fix_spelling(anything_else)
+
+# anything_else_stems <- stem_q_words(anything_else)
+anything_else_words_tfidf <- q_tf_idf(anything_else_words)
+
+anything_else_words_top <- top_q_tf_idf(anything_else_words, tf_idf_value=2.5, n_value=1)
+
+anything_else_freq <- q_word_frequency(anything_else_words)
+anything_else_freq_top <- anything_else_freq %>% top_n(25)
+```
+
+```{r anything_else_plot}
+
+ggplot(anything_else_words_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+ggplot(anything_else_freq_top, aes(x=reorder(word, n), y=n)) +
+  geom_bar(show.legend=FALSE, stat="identity") +
+  coord_flip()
+
+```
+
+```{r anything_else_wordcloud}
+
+anything_else_wcdata <- anything_else_words_top
+names(anything_else_wcdata) <- c("word", "freq")
+wordcloud2(anything_else_wcdata)
+
+anything_else_freq_wcdata <- anything_else_freq_top
+names(anything_else_freq_wcdata) <- c("word", "freq")
+wordcloud2(anything_else_freq_wcdata)
+
+```
+
