@@ -1,0 +1,70 @@
+Qcode,Qtext
+id,Response ID
+submitdate,Date submitted
+lastpage,Last page
+startlanguage,Start language
+startdate,Date started
+datestamp,Date last action
+ipaddr,IP address
+refurl,Referrer URL
+Q2,Do you use R?
+origin,Origin from URL parameters
+Q3,You said you do not use R. Have you used R in the past?
+Q4,Do you plan to use R in the future?
+Q5,How long have you been using R for?
+Q6,How do you use R? (For my studies)
+Q6_other,How do you use R? (Other)
+Q7,Is R your primary data analysis tool?
+Q8,Which other data analysis tools do you use? (Python)
+Q8_other,Which other data analysis tools do you use? (Other)
+Q9,What is your primary tool for interacting with R? (RGui)
+Q9_other,What is your primary tool for interacting with R? (Other)
+Q10,How do you usually install R? (Download from CRAN)
+Q10_other,How do you usually install R? (Other)
+Q11,"Which R implementation do you use? (Standard (vanilla) R, downloaded from CRAN)"
+Q12,You said you use an alternative version of R. Which alternative do you use? (Microsoft R Open / Server)
+Q12_other,You said you use an alternative version of R. Which alternative do you use? (Other)
+Q13,What is the typical data set size you use in R?
+Q14,Which of the following do you do? (I use functions from existing R packages to analyze data)
+Q15,Do you use R in production?
+Q16,Please describe how you use R in production
+Q17,How satisfied are you overall with R as a data analytics environment? (Overall)
+Q18,Now please consider some specific aspects of R. How satisfied are you with... (R documentation)
+QD1,You said you were {Q18_SQ01.shown} with R documentation. Please tell us why.
+QD2,You said you were {Q18_SQ02.shown} with R visualization tools. Please tell us why.
+QD3,You said you were {Q18_SQ03.shown} with Breadth of CRAN packages. Please tell us why.
+QD4,You said you were {Q18_SQ04.shown} with Quality of CRAN packages. Please tell us why.
+QD5,You said you were {Q18_SQ05.shown} with R as a general purpose language. Please tell us why.
+QD6,You said you were {Q18_SQ06.shown} with Speed and performance of R code. Please tell us why.
+QD7,You said you were {Q18_SQ07.shown} with Ease of use of R. Please tell us why.
+QD8,You said you were {Q18_SQ08.shown} with Interfacing to other languages. Please tell us why.
+QD9,You said you were {Q18_SQ09.shown} with Statistical algorithms. Please tell us why.
+QD10,You said you were {Q18_SQ10.shown} with Machine learning algorithms. Please tell us why.
+QD11,You said you were {Q18_SQ11.shown} with Getting data into R. Please tell us why.
+QS1,You said you were {Q18_SQ01.shown} with R documentation. Please tell us why.
+QS2,You said you were {Q18_SQ02.shown} with R visualization tools. Please tell us why.
+QS3,You said you were {Q18_SQ03.shown} with Breadth of CRAN packages. Please tell us why.
+QS4,You said you were {Q18_SQ04.shown} with Quality of CRAN packages. Please tell us why.
+QS5,You said you were {Q18_SQ05.shown} with R as a general purpose language. Please tell us why.
+QS6,You said you were {Q18_SQ06.shown} with Speed and performance of R code. Please tell us why.
+QS7,You said you were {Q18_SQ07.shown} with Ease of use of R. Please tell us why.
+QS8,You said you were {Q18_SQ08.shown} with Interfacing to other languages. Please tell us why.
+QS9,You said you were {Q18_SQ09.shown} with Statistical algorithms. Please tell us why.
+QS10,You said you were {Q18_SQ10.shown} with Machine learning algorithms. Please tell us why.
+QS11,You said you were {Q18_SQ11.shown} with Getting data into R. Please tell us why.
+Q27,What is the best aspect of working with R?
+Q28,What is the worst aspect of working with R?
+Q29,Do you agree with the following statements about the R Consortium? (I have heard of the R Consortium)
+Q30,What is the most useful thing the R Consortium has done for you?
+Q31,What else do you think the R Consortium should be doing for you?
+Q32,What is your gender?
+Q32_other,What is your gender? (Other)
+Q33,How old are you?
+Q34,What is your occupation?
+Q35,How do you identify?
+Q36,Which industry do you work in?
+Q37,In which country do you live? Position the pin to indicate where you live. You can zoom and move the map.
+Q38,Is there anything else you'd like to tell us?
+Q39,"Would you answer questions about R in future? If so, please provide your email address (optional)."
+.survey,.survey_version
+.count,.count
