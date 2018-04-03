@@ -1,0 +1,177 @@
+---
+title: "Reproduction of plots from Andrie de Vries's analysis"
+output: html_notebook
+---
+
+## Data import
+
+I'm using the full survey results dataset, which at the time of writing is undergoing anonymization but will afterwards be available on the GitHub repo.
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+results <- read.csv("data/results-survey214136.csv", check.names = FALSE, stringsAsFactors = FALSE) %>%
+    setNames(sapply(strsplit(names(.), "\\."), `[[`, 1)) %>%
+    mutate(submitdate = as_datetime(submitdate)) %>%
+    arrange(by = submitdate)
+```
+
+
+## Response rate
+
+This is an attempt to produce a more or less identical plot to the one Andrie features at the top of his analysis, showing the survey response count over time and how certain events led to upturns in response rate.
+
+```{r}
+# Define "special events"
+events <- data.frame(event = c("Survey reset", "UseR!2017 close",
+                               "Revolutions blog", "RUG email & Computerworld blog",
+                               "Datacamp", "Spanish translation"),
+                     date = as_datetime(c("2017-07-01", "2017-07-07",
+                                          "2017-07-11", "2017-07-13",
+                                          "2017-07-17", "2017-07-25"))
+)
+                           
+
+
+ggplot() +
+    geom_point(data = results, aes(x = submitdate, y = seq_len(nrow(results))),
+               alpha = 0.02) +
+    
+    # Add a by-day freqpoly
+    geom_area(data = results, aes(x = submitdate), stat = "bin",
+                  binwidth = 86400, alpha = 0.2, fill = "blue") +
+    
+    geom_vline(data = events, aes(xintercept = date),
+               colour = "grey") +
+    geom_text(data = events, aes(x = date, y = 4000, label = event),
+              nudge_x = -100000, angle = 90, colour = "grey", hjust = "right") +
+    
+    labs(title = "Survey responses", x = "", y = "Total responses") +
+    theme_minimal()
+```
+
+
+## Reported location
+
+Andrie has featured several views of a globe with locations marked; I thought I'd try to produce an interactive equivalent.
+
+```{r}
+library(leaflet)
+
+# Separate out latitude and longitude from the response to Q37 (location)
+loc <- results$Q37[results$Q37 != ""]
+lat <- as.numeric(sapply(strsplit(loc, ";"), `[[`, 1))
+lng <- as.numeric(sapply(strsplit(loc, ";"), `[[`, 2))
+
+leaflet() %>%
+    # Add default OpenStreetMap tiles
+    addTiles() %>%
+    addCircleMarkers(lng = lng, lat = lat, radius = 3, stroke = FALSE, fillOpacity = 0.5)
+```
+
+
+
+## Respondents not using R
+
+Andrie's plots in this section (and throughout the rest of the analysis) are perfectly functional; but I wondered if there might be a more adventurous way to display the information in this section.
+
+I don't think I've really succeeded because both of the following plots are, to my eyes, pretty ugly. But perhaps there is _something_ useful in there which might be improved upon.
+
+```{r}
+library(tidyr)
+
+# Get past/future usage info for current non-users
+nonusers <- results %>%
+    filter(Q2 == "No", Q3 %in% c("Yes", "No"), Q4 %in% c("Yes", "No")) %>%
+    select(Q3, Q4) %>%
+    rename(Past = Q3, Future = Q4) %>%
+    gather(period, response) %>%
+    mutate(period = factor(period, levels = c("Past", "Future")),
+           response = factor(response, levels = c("No", "Yes"))) %>%
+    group_by(period, response) %>%
+    summarise(ct = n())
+
+nonusers
+
+
+# Get "movement" of current non-users
+#   e.g. "YesNo" is a user who used to use R, is currently not using R, and does
+#   not plan on using R in future
+movement <- results %>%
+    filter(Q2 == "No", Q3 %in% c("Yes", "No"), Q4 %in% c("Yes", "No")) %>%
+    select(Q3, Q4) %>%
+    rename(Past = Q3, Future = Q4) %>%
+    mutate(status = paste0(Past, Future)) %>%
+    group_by(status) %>%
+    summarise(ct = n())
+
+movement
+
+
+ggplot(nonusers, aes(x = period, y = response)) +
+    # Totals of users/non-users for each time period, part 1
+    geom_tile(aes(fill = ct)) +
+    
+    expand_limits(xend = 4) +
+    
+    # Add arrows to show change in use
+    geom_segment(x = 0.25, xend = 2.75, y = 1, yend = 1, size = 3,
+                 colour = "grey", alpha = 0.2, arrow = arrow(length = unit(0.05, "npc"))) +
+    geom_segment(x = 0.25, xend = 2.75, y = 2, yend = 2, size = 3,
+                 colour = "grey", alpha = 0.2, arrow = arrow(length = unit(0.05, "npc"))) +
+    geom_segment(x = 0.25, xend = 2.75, y = 0.5, yend = 2.5, size = 3,
+                 colour = "grey", alpha = 0.2, arrow = arrow(length = unit(0.05, "npc"))) +
+    geom_segment(x = 0.25, xend = 2.75, y = 2.5, yend = 0.5, size = 3,
+                 colour = "grey", alpha = 0.2, arrow = arrow(length = unit(0.05, "npc"))) +
+    
+    # Totals of users/non-users for each time period, part 2 (here so that it's above arrows)
+    geom_text(aes(label = ct), size = 20, colour = "white", fontface = "bold") +
+    
+    # Totals for movement in each direction
+    annotate("text", x = 3, y = 1.5, hjust = "left", size = 7, fontface = "bold",
+             label = "User status") +
+    
+    annotate("text", x = 3, y = 2.5, hjust = "left", size = 4,
+             label = paste0("Getting started:  ", movement$ct[movement$status == "NoYes"])) +
+    annotate("text", x = 3, y = 2, hjust = "left", size = 4,
+             label = paste0("On a break:  ", movement$ct[movement$status == "YesYes"])) +
+    annotate("text", x = 3, y = 1, hjust = "left", size = 4,
+             label = paste0("Survey saboteur:  ", movement$ct[movement$status == "NoNo"])) +
+    annotate("text", x = 3, y = 0.5, hjust = "left", size = 4,
+             label = paste0("Disenamoured:  ", movement$ct[movement$status == "YesNo"])) +
+    
+    labs(title = "Those not currently using R: past/future use of R", x = "", y = "") +
+    theme_minimal() +
+    theme(legend.position = "none", plot.title = element_text(size = 17)) 
+```
+
+
+```{r}
+# I think the previous plot is ugly and wanted to show the info in a nicer way;
+# but I've struggled to add sensible labels to the following plot
+nonusers2 <- results %>%
+    filter(Q2 == "No", Q3 %in% c("Yes", "No"), Q4 %in% c("Yes", "No")) %>%
+    select(id, Q3, Q4) %>%
+    rename(Past = Q3, Future = Q4) %>%
+    gather(period, response, -id) %>%
+    mutate(period = factor(period, levels = c("Past", "Future")),
+           response = factor(response, levels = c("Yes", "No")))
+
+
+library(ggalluvial)
+
+ggplot(nonusers2, aes(x = period, stratum = response, alluvium = id,
+                  fill = response)) +
+    geom_stratum(alpha = 0.5) +
+    guides(fill = FALSE) +
+    geom_flow(color = "black", alpha = 0.3) +
+    geom_text(stat = "stratum", aes(label = response), fontface = "bold") +
+    labs(title = "Those not currently using R: past/future use of R", x = "", y = "") +
+    scale_fill_manual(values = c("lightblue", "red")) +
+    theme(plot.title = element_text(size = 20)) +
+    theme_minimal()
+```
+
+
