@@ -1,0 +1,206 @@
+---
+title: "Anonymize Survey"
+author: "Augustina Ragwitz"
+date: r! Sys.date()
+output: html_document
+params:
+  survey_file: "data/results-survey214136.csv"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r includes}
+
+library(dplyr)
+library(ggplot2)
+library(httr)
+library(jsonlite)
+library(readr)
+library(stringr)
+
+```
+
+
+## Survey Results
+
+Read in a CSV of the survey results. These are not included in the repo because they have not been anonymized yet.
+
+```{r raw_survey}
+
+raw_survey <- read_csv(params$survey_file)
+
+survey_data_anon <- data_frame()
+
+```
+
+## IP Address
+
+We should remove the IP Address because it is too specific of an identifier. The plot below shows that in most cases a single IP address only had one respondee. 
+```{r ip_address}
+ 
+ip_summary <- raw_survey %>% 
+  group_by(`ipaddr. IP address`) %>% 
+  summarise(total_respondants=n()) %>% 
+  ungroup() %>%
+  group_by(total_respondants) %>%
+  summarise(total_ips=n(), needs_anon = first(total_respondants) < 25) %>%
+  arrange(-total_ips)
+
+write_csv(ip_summary, "data/raw_survey_ip_summary.csv")
+
+ip_summary
+
+ggplot(ip_summary, 
+       aes(y=factor(total_ips), x=factor(total_respondants))) +
+  geom_bar(aes(fill=needs_anon), stat="identity") +
+  coord_polar() +
+  labs(y = "IP Addresses", x = "Survey Takers", title="Survey Takers from a Unique IP Address")
+
+ggplot(ip_summary, aes(x=needs_anon, y=total_ips, fill=needs_anon)) +
+  geom_bar(stat="sum", show.legend = FALSE)
+
+```
+
+My recommendation is to convert the IP address to a country.
+
+```{r ip_address_country, eval=FALSE}
+get_country_from_ip <- function(ip) {
+  url <- paste0("http://freegeoip.net/json/", ip)
+  geoip_req <- GET(url)
+  geoip <- fromJSON(content(geoip_req, as = "text"), flatten=TRUE)
+  return(geoip)
+}
+
+# This needs to be done in a for loop because it can fail,
+#  rather than starting over, it's easier to set n to the failure point
+
+ip_address_country <- data_frame()
+
+for(n in 1:nrow(raw_survey)) {
+  ip <- raw_survey$`ipaddr. IP address`[n]
+  
+  if(ip == "Invalid") {
+    geoip <- data_frame(ip=ip) # remaining fields will be NA on join later
+  } else {
+    print(paste("Looking up", n, ip))
+    geoip <- as_data_frame(get_country_from_ip(ip)) %>% 
+      select(ip, country_code, country_name, time_zone)
+  }
+  
+  ip_address_country <- bind_rows(ip_address_country, geoip)
+                                  
+}
+
+ip_address_country <- ip_address_country %>%
+  unique()
+
+# convert blanks to NA
+ip_address_country[ip_address_country==""]  <- NA 
+
+```
+
+## Origin Parameter
+
+The origin from URL parameter is mostly ok, but some meetup groups are mentioned by name. Often member lists are public. These are only in a minority of responses but depending on the nature of the free text, one could potentially track someone down.
+
+```{r origin_parameter}
+
+origin_summary <- raw_survey %>%
+  rename(origin=`origin. Origin from URL parameters`) %>%
+  mutate(origin=str_replace_all(origin, "[^A-Za-z]", "")) %>% # clean up the dupes with extra characters
+  group_by(origin) %>%
+  summarise(total_respondants=n())
+
+write_csv(origin_summary, "data/raw_survey_origin_summary.csv")
+
+sum_respondants <- sum(origin_summary$total_respondants)
+
+origin_summary
+
+ggplot(origin_summary, aes(x=origin, y=round(total_respondants/sum_respondants, 2))) +
+  geom_bar(aes(fill=origin), stat="identity", show.legend = FALSE) +
+  coord_flip() +
+  scale_y_continuous(labels=scales::percent) +
+  labs(x = "Referrer Origin", y = "Survey Takers per Referrer")
+```
+
+Origin parameters that represent meetup groups should be changed from the specific Meetup group to "Meetup". Not all of them use the term "meetup" so some may need to be manually updated.
+ 
+```{r origin_clean, eval=FALSE}
+
+useRs <- c(
+  "londonR"
+)
+
+origin_clean <- raw_survey %>%
+  # clean up the dupes with extra characters
+  mutate(origin=str_replace_all(`origin. Origin from URL parameters`, "[^A-Za-z]", "")) %>% 
+  mutate(origin=ifelse(str_detect(origin, "meetup") | origin %in% useRs, "meetup", origin)) %>%
+  select(`origin. Origin from URL parameters`, origin) %>%
+  unique()
+  
+
+```
+
+## Referring URL
+
+The referring URLs occurring in only a few respondants should be generalized to minimize the likelihood of identification.
+
+```{r refurl}
+
+refurl_summary <- raw_survey %>%
+  rename(refurl = `refurl. Referrer URL`) %>%
+  mutate(refurl = str_replace(refurl, "\\?.*$", ""),
+         refurl = str_replace(refurl, "/$", ""),
+         refurl = str_replace(refurl, "^.*//", "")) %>%
+  group_by(refurl) %>%
+  summarise(total_respondants=n(), 
+            needs_anon=total_respondants < 25,
+            is_shortened = str_detect(first(refurl), "^t\\.co")) %>%
+  group_by(total_respondants) %>%
+  mutate(total_refurls=n()) %>% 
+  unique()
+
+refurl_summary_summary <- refurl_summary %>% 
+  summarise(total_refurls=first(total_refurls), 
+            needs_anon=first(needs_anon)) %>%
+  arrange(total_respondants)
+
+write_csv(refurl_summary_summary, "data/raw_survey_refurl_summary.csv")
+
+refurl_summary_summary
+
+ggplot(refurl_summary_summary, 
+       aes(y=factor(total_refurls), x=factor(total_respondants))) +
+  geom_bar(aes(fill=needs_anon), stat="identity") +
+  coord_polar() +
+  labs(y = "Ref Urls", x = "Survey Takers", title="Survey Takers from a Unique Ref URL")
+
+ggplot(refurl_summary, aes(x=needs_anon, fill=is_shortened)) +
+  geom_bar()
+
+ggplot(refurl_summary, aes(x=is_shortened, fill=needs_anon)) +
+  geom_bar()
+
+```
+
+```{r ref_url_clean, eval=FALSE}
+
+# TODO resolve t.co urls, those are masking other referrals
+# Options - extract domain for all (simplest), only extract domain for < 100 respondants
+
+# If based on respondants: 1) clean URLS - remove protocol (^.*//), trailing (/$), and query params (\\?.*), summarize respondants, extract domain if > 100
+
+# If just domain, then just extract the domain
+
+
+```
+
+
+
+
+
+
+

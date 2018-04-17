@@ -4,6 +4,7 @@
 
 # Session Data files
 .RData
+rsconnect/
 
 # Example code in package build process
 *-Ex.R
@@ -16,6 +17,7 @@
 
 # RStudio files
 .Rproj.user/
+*.Rproj
 
 # produced vignettes
 vignettes/*.html
@@ -31,3 +33,7 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+
+# special data files
+2017/data/results-survey214136.csv
+
