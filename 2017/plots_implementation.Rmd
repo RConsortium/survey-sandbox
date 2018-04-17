@@ -1,0 +1,71 @@
+---
+title: "R Plots - Implementation"
+author: "Augustina Ragwitz"
+date: "April 17, 2018"
+output: html_document
+---
+
+## Which Implementation Do You Use?
+
+```{r imports, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lazyeval)
+library(ggplot2)
+library(readr)
+library(reshape2)
+```
+
+```{r read_survey_data, message=FALSE, warning=FALSE, eval=FALSE}
+
+survey <- read_csv("data/results-survey214136.csv")
+total_respondants <- nrow(survey)
+
+q11 <- survey %>% 
+  subset(select=48:59) %>%
+  rename(
+    `Standard (vanilla)`=`Q11[R]. Which R implementation do you use? [Standard (vanilla) R, downloaded from CRAN]`,
+    `Blas`=`Q11[Rblas]. Which R implementation do you use? [R, augmented with alternative math kernel (BLAS, e.g. MKL, OpenBLAS or Atlas)]`,
+    `Alternative`=`Q11[Ralt]. Which R implementation do you use? [An alternative version of R (for example pqR, Renjin, fastR, etc.)]`,
+    `I Don't Know`=`Q11[DK]. Which R implementation do you use? [I don't know]`,
+    `Microsoft R`=`Q12[SQ001]. You said you use an alternative version of R. Which alternative do you use? [Microsoft R Open / Server]`,
+    `TIBCO`=`Q12[SQ002]. You said you use an alternative version of R. Which alternative do you use? [TIBCO Enterprise Runtime for R (TERR)]`,
+    `Oracle R`=`Q12[SQ003]. You said you use an alternative version of R. Which alternative do you use? [Oracle R]`,
+    `PQR`=`Q12[SQ004]. You said you use an alternative version of R. Which alternative do you use? [pQR]`,
+    `Renjin`=`Q12[SQ005]. You said you use an alternative version of R. Which alternative do you use? [Renjin]`,
+    `Fast R`=`Q12[SQ006]. You said you use an alternative version of R. Which alternative do you use? [fastR]`,
+    `Rho`=`Q12[SQ007]. You said you use an alternative version of R. Which alternative do you use? [Rho (previously known as CxxR)]`,
+    `Other Alternative`=`Q12[other]. You said you use an alternative version of R. Which alternative do you use? [Other]`
+  ) %>%
+  na_if("N/A") %>%
+  na_if("No") %>%
+  mutate(id = row_number())
+
+q11_melt <- melt(q11, id.vars="id")
+
+q11_melt_summary <- q11_melt %>%
+  filter(!is.na(value)) %>%
+  group_by(variable) %>%
+  summarise(num_respondants=n(),
+            pct_respondants=num_respondants/total_respondants)
+
+
+write_csv(q11_melt_summary, "data/q11_summary.csv")
+```
+
+```{r plot_survey_data, message=FALSE}
+
+q11_summary <- read_csv("data/q11_summary.csv")
+
+ggplot(q11_summary, aes(x=reorder(variable, pct_respondants), y=pct_respondants, fill=variable)) +
+  geom_col(show.legend = FALSE) +
+  scale_y_continuous(labels = scales::percent) +
+  coord_flip() +
+  labs(title="Q11 + Q12: Which R implementation do you use?", x="R Implementation", y="Survey Responses")
+
+ggsave("png/q11.png")
+
+```
+
+
+
+
