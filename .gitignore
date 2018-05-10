@@ -37,3 +37,4 @@ vignettes/*.pdf
 # special data files
 2017/data/results-survey214136.csv
 
+.Rproj.user
